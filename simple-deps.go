@@ -91,7 +91,9 @@ func main() {
 				}
 			}
 		} else {
-
+			if s, err := os.Stat(lib.Name); err == nil && s.IsDir() {
+				log.Printf("Using directory %v", lib.Name)
+			}
 		}
 	}
 }
