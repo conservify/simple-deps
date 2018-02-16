@@ -181,11 +181,11 @@ func main() {
 		} else {
 			if s, err := os.Stat(lib.Name); err == nil && s.IsDir() {
 				version, err := GetRepositoryHash(lib.Name)
-				if err != nil {
-					log.Fatalf("Error: %v", err)
+				if err == nil {
+					log.Printf("Using directory %v (%v)", lib.Name, version)
+				} else {
+					log.Printf("Using directory %v", lib.Name)
 				}
-
-				log.Printf("Using directory %v (%v)", lib.Name, version)
 			}
 		}
 	}
