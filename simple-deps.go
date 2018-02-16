@@ -78,18 +78,26 @@ type configuration struct {
 	UseLatest     bool
 }
 
-func GetRepositoryHash(path string) (h plumbing.Hash, err error) {
-	r, err := git.PlainOpen(path)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
+func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
+	for {
+		r, err := git.PlainOpen(p)
+		if err != nil {
+			p = path.Dir(p)
+			if p == "." || p == "/" {
+				return plumbing.ZeroHash, err
+			}
+			continue
+		}
 
-	ref, err := r.Head()
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
+		ref, err := r.Head()
+		if err != nil {
+			return plumbing.ZeroHash, err
+		}
 
-	h = ref.Hash()
+		h = ref.Hash()
+
+		break
+	}
 
 	return
 }
@@ -192,6 +200,6 @@ func main() {
 
 	if modified {
 		log.Printf("Wrote new configuration")
-		deps.Write("arduino-libraries")
+		deps.Write(config.Configuration)
 	}
 }
