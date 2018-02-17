@@ -156,7 +156,7 @@ func main() {
 				}
 
 				if config.UseLatest {
-					err = r.Pull(&git.PullOptions{
+					err = w.Pull(&git.PullOptions{
 						RemoteName: "origin",
 					})
 					if err != nil && err != git.NoErrAlreadyUpToDate {
