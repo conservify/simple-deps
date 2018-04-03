@@ -182,6 +182,7 @@ func main() {
 
 				newVersion := ref.Hash().String()
 				if lib.Version != newVersion {
+					log.Printf("Version changed: %v", newVersion)
 					lib.Version = newVersion
 					modified = true
 				}
