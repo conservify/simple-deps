@@ -24,6 +24,12 @@ type Dependencies struct {
 	Libraries []*Library
 }
 
+func NewDependencies() *Dependencies {
+	return &Dependencies{
+		Libraries: make([]*Library, 0),
+	}
+}
+
 func (d *Dependencies) Write(path string) error {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -44,15 +50,14 @@ func (d *Dependencies) Write(path string) error {
 
 }
 
-func readDependencies(path string) (*Dependencies, error) {
+func (d *Dependencies) Read(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	defer file.Close()
 
-	var libs []*Library
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -63,16 +68,13 @@ func readDependencies(path string) (*Dependencies, error) {
 			version = fields[1]
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
-		libs = append(libs, &Library{
+		d.Libraries = append(d.Libraries, &Library{
 			UrlOrPath: urlOrPath,
 			Version:   version,
 			URL:       url,
 		})
 	}
-	deps := &Dependencies{
-		Libraries: libs,
-	}
-	return deps, scanner.Err()
+	return scanner.Err()
 }
 
 type configuration struct {
@@ -110,8 +112,6 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 	name = strings.TrimSuffix(name, path.Ext(name))
 	p := path.Join(config.Directory, name)
 
-	log.Printf("Checking %s %s", lib.URL, p)
-
 	if _, err := os.Stat(p); os.IsNotExist(err) {
 		log.Printf("Cloning %s %s", lib.URL, p)
 
@@ -123,17 +123,8 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 			return false, err
 		}
 	} else {
-		log.Printf("Fetching %s %s", lib.URL, p)
-
 		r, err := git.PlainOpen(p)
 		if err != nil {
-			return false, err
-		}
-
-		err = r.Fetch(&git.FetchOptions{
-			RemoteName: "origin",
-		})
-		if err != nil && err != git.NoErrAlreadyUpToDate {
 			return false, err
 		}
 
@@ -151,13 +142,26 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 			}
 		} else {
 			if lib.Version != "" {
-				log.Printf("Checkout out %s", lib.Version)
-				err = w.Checkout(&git.CheckoutOptions{
-					Hash:  plumbing.NewHash(lib.Version),
-					Force: true,
-				})
-				if err != nil {
-					return false, err
+				existing, err := GetRepositoryHash(p)
+				if existing.String() != lib.Version {
+					log.Printf("Fetching %s %s", lib.URL, p)
+					err = r.Fetch(&git.FetchOptions{
+						RemoteName: "origin",
+					})
+					if err != nil && err != git.NoErrAlreadyUpToDate {
+						return false, err
+					}
+
+					log.Printf("Checkout out %s", lib.Version)
+					err = w.Checkout(&git.CheckoutOptions{
+						Hash:  plumbing.NewHash(lib.Version),
+						Force: true,
+					})
+					if err != nil {
+						return false, err
+					}
+				} else {
+					log.Printf("%s already on %s", name, lib.Version)
 				}
 			}
 		}
@@ -179,24 +183,40 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 
 func main() {
 	config := configuration{}
-	flag.StringVar(&config.Configuration, "config", "arduino-libraries", "libraries file")
+	flag.StringVar(&config.Configuration, "config", "", "libraries file")
 	flag.StringVar(&config.Directory, "dir", "./gitdeps", "where to cache libraries")
 	flag.BoolVar(&config.UseLatest, "use-latest", false, "use the latest version of libraries")
 
 	flag.Parse()
 
-	deps, err := readDependencies(config.Configuration)
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	configs := make([]string, 0)
+	if s, err := os.Stat("arduino-libraries"); err == nil && !s.IsDir() {
+		configs = append(configs, "arduino-libraries")
+	}
+	if config.Configuration != "" {
+		configs = append(configs, config.Configuration)
+	}
+	configs = append(configs, flag.Args()...)
+
+	deps := NewDependencies()
+
+	for _, configuration := range configs {
+		err := deps.Read(configuration)
+		if err != nil {
+			log.Fatalf("Error: %v", err)
+		}
 	}
 
 	modified := false
 
 	for _, lib := range deps.Libraries {
 		if lib.URL != nil {
-			modified, err = cloneDependency(lib, &config)
+			cloneModified, err := cloneDependency(lib, &config)
 			if err != nil {
 				log.Fatal(err)
+			}
+			if cloneModified {
+				modified = true
 			}
 		} else {
 			if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
