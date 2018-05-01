@@ -4,19 +4,20 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
 	"log"
 	"net/url"
 	"os"
 	"path"
-	_ "regexp"
 	"strings"
+
+	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 type Library struct {
-	Name    string
-	Version string
+	UrlOrPath string
+	Version   string
+	URL       *url.URL
 }
 
 type Dependencies struct {
@@ -33,9 +34,9 @@ func (d *Dependencies) Write(path string) error {
 
 	for _, lib := range d.Libraries {
 		if lib.Version != "" {
-			f.WriteString(fmt.Sprintf("%s %s\n", lib.Name, lib.Version))
+			f.WriteString(fmt.Sprintf("%s %s\n", lib.UrlOrPath, lib.Version))
 		} else {
-			f.WriteString(fmt.Sprintf("%s\n", lib.Name))
+			f.WriteString(fmt.Sprintf("%s\n", lib.UrlOrPath))
 		}
 	}
 
@@ -56,14 +57,16 @@ func readDependencies(path string) (*Dependencies, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Split(line, " ")
-		nameOrPath := fields[0]
+		urlOrPath := fields[0]
 		version := ""
 		if len(fields) > 1 {
 			version = fields[1]
 		}
+		url, _ := url.ParseRequestURI(urlOrPath)
 		libs = append(libs, &Library{
-			Name:    nameOrPath,
-			Version: version,
+			UrlOrPath: urlOrPath,
+			Version:   version,
+			URL:       url,
 		})
 	}
 	deps := &Dependencies{
@@ -102,6 +105,78 @@ func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
 	return
 }
 
+func cloneDependency(lib *Library, config *configuration) (modified bool, err error) {
+	name := path.Base(lib.URL.Path)
+	name = strings.TrimSuffix(name, path.Ext(name))
+	p := path.Join(config.Directory, name)
+
+	log.Printf("Checking %s %s", lib.URL, p)
+
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		log.Printf("Cloning %s %s", lib.URL, p)
+
+		_, err := git.PlainClone(p, false, &git.CloneOptions{
+			URL:      lib.UrlOrPath,
+			Progress: os.Stdout,
+		})
+		if err != nil {
+			return false, err
+		}
+	} else {
+		log.Printf("Fetching %s %s", lib.URL, p)
+
+		r, err := git.PlainOpen(p)
+		if err != nil {
+			return false, err
+		}
+
+		err = r.Fetch(&git.FetchOptions{
+			RemoteName: "origin",
+		})
+		if err != nil && err != git.NoErrAlreadyUpToDate {
+			return false, err
+		}
+
+		w, err := r.Worktree()
+		if err != nil {
+			return false, err
+		}
+
+		if config.UseLatest {
+			err = w.Pull(&git.PullOptions{
+				RemoteName: "origin",
+			})
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				return false, err
+			}
+		} else {
+			if lib.Version != "" {
+				log.Printf("Checkout out %s", lib.Version)
+				err = w.Checkout(&git.CheckoutOptions{
+					Hash:  plumbing.NewHash(lib.Version),
+					Force: true,
+				})
+				if err != nil {
+					return false, err
+				}
+			}
+		}
+
+		ref, err := r.Head()
+		if err != nil {
+			return false, err
+		}
+
+		newVersion := ref.Hash().String()
+		if lib.Version != newVersion {
+			log.Printf("Version changed: %v", newVersion)
+			lib.Version = newVersion
+			modified = true
+		}
+	}
+	return
+}
+
 func main() {
 	config := configuration{}
 	flag.StringVar(&config.Configuration, "config", "arduino-libraries", "libraries file")
@@ -118,82 +193,18 @@ func main() {
 	modified := false
 
 	for _, lib := range deps.Libraries {
-		if url, err := url.ParseRequestURI(lib.Name); err == nil {
-			name := path.Base(url.Path)
-			name = strings.TrimSuffix(name, path.Ext(name))
-			p := path.Join(config.Directory, name)
-
-			log.Printf("Checking %s %s", url, p)
-
-			if _, err := os.Stat(p); os.IsNotExist(err) {
-				log.Printf("Cloning %s %s", url, p)
-
-				_, err := git.PlainClone(p, false, &git.CloneOptions{
-					URL:      lib.Name,
-					Progress: os.Stdout,
-				})
-				if err != nil {
-					log.Fatalf("Error: %v", err)
-				}
-			} else {
-				log.Printf("Fetching %s %s", url, p)
-
-				r, err := git.PlainOpen(p)
-				if err != nil {
-					log.Fatalf("Error: %v", err)
-				}
-
-				err = r.Fetch(&git.FetchOptions{
-					RemoteName: "origin",
-				})
-				if err != nil && err != git.NoErrAlreadyUpToDate {
-					log.Fatalf("Error: %v", err)
-				}
-
-				w, err := r.Worktree()
-				if err != nil {
-					log.Fatalf("Error: %v", err)
-				}
-
-				if config.UseLatest {
-					err = w.Pull(&git.PullOptions{
-						RemoteName: "origin",
-					})
-					if err != nil && err != git.NoErrAlreadyUpToDate {
-						log.Fatalf("Error: %v", err)
-					}
-				} else {
-					if lib.Version != "" {
-						log.Printf("Checkout out %s", lib.Version)
-						err = w.Checkout(&git.CheckoutOptions{
-							Hash:  plumbing.NewHash(lib.Version),
-							Force: true,
-						})
-						if err != nil {
-							log.Fatalf("Error: %v", err)
-						}
-					}
-				}
-
-				ref, err := r.Head()
-				if err != nil {
-					log.Fatalf("Error: %v", err)
-				}
-
-				newVersion := ref.Hash().String()
-				if lib.Version != newVersion {
-					log.Printf("Version changed: %v", newVersion)
-					lib.Version = newVersion
-					modified = true
-				}
+		if lib.URL != nil {
+			modified, err = cloneDependency(lib, &config)
+			if err != nil {
+				log.Fatal(err)
 			}
 		} else {
-			if s, err := os.Stat(lib.Name); err == nil && s.IsDir() {
-				version, err := GetRepositoryHash(lib.Name)
+			if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
+				version, err := GetRepositoryHash(lib.UrlOrPath)
 				if err == nil {
-					log.Printf("Using directory %v (%v)", lib.Name, version)
+					log.Printf("Using directory %v (%v)", lib.UrlOrPath, version)
 				} else {
-					log.Printf("Using directory %v", lib.Name)
+					log.Printf("Using directory %v", lib.UrlOrPath)
 				}
 			}
 		}
