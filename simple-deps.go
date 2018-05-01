@@ -15,25 +15,33 @@ import (
 )
 
 type Library struct {
-	UrlOrPath string
-	Version   string
-	URL       *url.URL
+	Configuration string
+	UrlOrPath     string
+	Version       string
+	Modified      bool
+	URL           *url.URL
 }
 
 type Dependencies struct {
 	Libraries []*Library
 }
 
-func NewDependencies() *Dependencies {
+func NewEmptyDependencies() *Dependencies {
 	return &Dependencies{
 		Libraries: make([]*Library, 0),
+	}
+}
+
+func NewDependencies(libraries []*Library) *Dependencies {
+	return &Dependencies{
+		Libraries: libraries,
 	}
 }
 
 func (d *Dependencies) Write(path string) error {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	defer f.Close()
@@ -69,9 +77,10 @@ func (d *Dependencies) Read(path string) error {
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
 		d.Libraries = append(d.Libraries, &Library{
-			UrlOrPath: urlOrPath,
-			Version:   version,
-			URL:       url,
+			Configuration: path,
+			UrlOrPath:     urlOrPath,
+			Version:       version,
+			URL:           url,
 		})
 	}
 	return scanner.Err()
@@ -107,7 +116,7 @@ func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
 	return
 }
 
-func cloneDependency(lib *Library, config *configuration) (modified bool, err error) {
+func cloneDependency(lib *Library, config *configuration) (err error) {
 	name := path.Base(lib.URL.Path)
 	name = strings.TrimSuffix(name, path.Ext(name))
 	p := path.Join(config.Directory, name)
@@ -120,17 +129,17 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 			Progress: os.Stdout,
 		})
 		if err != nil {
-			return false, err
+			return err
 		}
 	} else {
 		r, err := git.PlainOpen(p)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		w, err := r.Worktree()
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if config.UseLatest {
@@ -138,7 +147,7 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 				RemoteName: "origin",
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				return false, err
+				return err
 			}
 		} else {
 			if lib.Version != "" {
@@ -149,7 +158,7 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 						RemoteName: "origin",
 					})
 					if err != nil && err != git.NoErrAlreadyUpToDate {
-						return false, err
+						return err
 					}
 
 					log.Printf("Checkout out %s", lib.Version)
@@ -158,24 +167,24 @@ func cloneDependency(lib *Library, config *configuration) (modified bool, err er
 						Force: true,
 					})
 					if err != nil {
-						return false, err
+						return err
 					}
 				} else {
-					log.Printf("%s already on %s", name, lib.Version)
+					log.Printf("%s: Already on %s", name, lib.Version)
 				}
 			}
 		}
 
 		ref, err := r.Head()
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		newVersion := ref.Hash().String()
 		if lib.Version != newVersion {
-			log.Printf("Version changed: %v", newVersion)
+			log.Printf("%s: Version changed: %v", name, newVersion)
 			lib.Version = newVersion
-			modified = true
+			lib.Modified = true
 		}
 	}
 	return
@@ -198,7 +207,7 @@ func main() {
 	}
 	configs = append(configs, flag.Args()...)
 
-	deps := NewDependencies()
+	deps := NewEmptyDependencies()
 
 	for _, configuration := range configs {
 		err := deps.Read(configuration)
@@ -207,16 +216,10 @@ func main() {
 		}
 	}
 
-	modified := false
-
 	for _, lib := range deps.Libraries {
 		if lib.URL != nil {
-			cloneModified, err := cloneDependency(lib, &config)
-			if err != nil {
+			if err := cloneDependency(lib, &config); err != nil {
 				log.Fatal(err)
-			}
-			if cloneModified {
-				modified = true
 			}
 		} else {
 			if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
@@ -230,8 +233,28 @@ func main() {
 		}
 	}
 
-	if modified {
-		log.Printf("Wrote new configuration")
-		deps.Write(config.Configuration)
+	byConfiguration := make(map[string][]*Library)
+
+	for _, lib := range deps.Libraries {
+		if byConfiguration[lib.Configuration] == nil {
+			byConfiguration[lib.Configuration] = make([]*Library, 0)
+		}
+		byConfiguration[lib.Configuration] = append(byConfiguration[lib.Configuration], lib)
+	}
+
+	for configuration, libs := range byConfiguration {
+		modified := false
+		for _, lib := range libs {
+			if lib.Modified {
+				modified = true
+				break
+			}
+		}
+
+		if modified {
+			log.Printf("%s: Writing", configuration)
+			deps := NewDependencies(libs)
+			deps.Write(configuration)
+		}
 	}
 }
