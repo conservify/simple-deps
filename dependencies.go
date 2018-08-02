@@ -55,7 +55,6 @@ func (d *Dependencies) Write(path string) error {
 	}
 
 	return nil
-
 }
 
 func (d *Dependencies) Read(fn string) error {
@@ -125,16 +124,16 @@ func (d *Dependencies) SaveModified() error {
 	return nil
 }
 
-func checkForLocal(lib *Library) string {
+func checkForLocalOverride(lib *Library) (string, error) {
 	expected := path.Join("../", lib.Name)
 	if s, err := os.Stat(expected); err == nil && !s.Mode().IsRegular() {
 		abs, err := filepath.Abs(expected)
 		if err != nil {
-			log.Fatal(err)
+			return "", err
 		}
-		return abs
+		return abs, nil
 	}
-	return ""
+	return "", nil
 }
 
 type DependencyInfo struct {
@@ -152,23 +151,19 @@ func (d *Dependencies) Refresh(directory string, useHead bool) error {
 	project := "./"
 
 	for _, lib := range d.Libraries {
-		dependencyPath := checkForLocal(lib)
+		dependencyPath, err := checkForLocalOverride(lib)
+		if err != nil {
+			return err
+		}
 		if dependencyPath == "" {
 			if lib.URL != nil {
 				clonePath, err := CloneDependency(lib, directory, useHead)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
-				dependencyPath, err = filepath.Abs(clonePath)
-				if err != nil {
-					log.Fatal(err)
-				}
+				dependencyPath = clonePath
 			} else {
 				if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
-					dependencyPath, err = filepath.Abs(lib.UrlOrPath)
-					if err != nil {
-						return err
-					}
 					version, err := GetRepositoryHash(lib.UrlOrPath)
 					if err == nil {
 						log.Printf("Using directory %v (%v)", lib.UrlOrPath, version)
@@ -179,7 +174,12 @@ func (d *Dependencies) Refresh(directory string, useHead bool) error {
 			}
 		}
 
-		log.Printf("%s %s", lib.UrlOrPath, dependencyPath)
+		dependencyPath, err = filepath.Abs(dependencyPath)
+		if err != nil {
+			return err
+		}
+
+		log.Printf("Dependency: %s = %s", lib.UrlOrPath, dependencyPath)
 
 		templateDatas = append(templateDatas, &DependencyInfo{
 			Name: lib.Name,
