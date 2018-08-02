@@ -67,6 +67,8 @@ func (d *Dependencies) Read(fn string) error {
 
 	defer file.Close()
 
+	versionsByPath := make(map[string]string)
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -85,6 +87,7 @@ func (d *Dependencies) Read(fn string) error {
 			recurse = fields[3] == "recurse"
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
+
 		name := ""
 		if url != nil {
 			name = path.Base(url.Path)
@@ -92,6 +95,10 @@ func (d *Dependencies) Read(fn string) error {
 		} else {
 			name = path.Base(urlOrPath)
 		}
+		if relativePath != "/" {
+			name += strings.Replace(relativePath, "/", "_", -1)
+		}
+
 		d.Libraries = append(d.Libraries, &Library{
 			Configuration: fn,
 			UrlOrPath:     urlOrPath,
@@ -101,7 +108,13 @@ func (d *Dependencies) Read(fn string) error {
 			Recurse:       recurse,
 			URL:           url,
 		})
+
+		if versionsByPath[urlOrPath] != "" && versionsByPath[urlOrPath] != version {
+			log.Fatalf("Version mismatch: %s! Versions for repositories are required to be the same.", urlOrPath)
+		}
+		versionsByPath[urlOrPath] = version
 	}
+
 	return scanner.Err()
 }
 

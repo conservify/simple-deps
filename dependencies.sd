@@ -1,0 +1,2 @@
+https://github.com/adafruit/ArduinoCore-samd.git * /libraries/SPI recurse
+https://github.com/adafruit/ArduinoCore-samd.git * /libraries/Wire recurse

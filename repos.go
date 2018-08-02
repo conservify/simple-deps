@@ -152,7 +152,7 @@ func (repos *Repositories) CloneDependency(lib *Library, directory string, useHe
 	p := path.Join(directory, name)
 
 	pullCache := useHead
-	if !repos.HasCommit(cached, lib.Version) {
+	if lib.Version == "*" || !repos.HasCommit(cached, lib.Version) {
 		log.Printf("Version mismatch, pulling")
 		pullCache = true
 	}
