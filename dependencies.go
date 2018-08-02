@@ -184,8 +184,10 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 		log.Printf("Dependency: %s = %s", lib.UrlOrPath, dependencyPath)
 
 		templateDatas = append(templateDatas, &DependencyInfo{
-			Name: lib.Name,
-			Path: dependencyPath,
+			Name:         lib.Name,
+			Path:         dependencyPath,
+			RelativePath: lib.RelativePath,
+			Recurse:      lib.Recurse,
 		})
 
 		project = filepath.Dir(lib.Configuration)
@@ -199,9 +201,10 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 }
 
 type DependencyInfo struct {
-	Name      string
-	Path      string
-	Recursive bool
+	Name         string
+	Path         string
+	RelativePath string
+	Recurse      bool
 }
 
 type TemplateData struct {
