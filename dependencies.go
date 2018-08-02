@@ -17,6 +17,8 @@ type Library struct {
 	Configuration string
 	UrlOrPath     string
 	Version       string
+	RelativePath  string
+	Recurse       bool
 	Name          string
 	Modified      bool
 	URL           *url.URL
@@ -47,11 +49,11 @@ func (d *Dependencies) Write(path string) error {
 	defer f.Close()
 
 	for _, lib := range d.Libraries {
-		if lib.Version != "" {
-			f.WriteString(fmt.Sprintf("%s %s\n", lib.UrlOrPath, lib.Version))
-		} else {
-			f.WriteString(fmt.Sprintf("%s\n", lib.UrlOrPath))
+		recurseFlag := "norecurse"
+		if lib.Recurse {
+			recurseFlag = "recurse"
 		}
+		f.WriteString(fmt.Sprintf("%s %s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath, recurseFlag))
 	}
 
 	return nil
@@ -70,9 +72,17 @@ func (d *Dependencies) Read(fn string) error {
 		line := scanner.Text()
 		fields := strings.Split(line, " ")
 		urlOrPath := fields[0]
-		version := ""
+		version := "*"
+		relativePath := "/"
+		recurse := false
 		if len(fields) > 1 {
 			version = fields[1]
+		}
+		if len(fields) > 2 {
+			relativePath = fields[2]
+		}
+		if len(fields) > 3 {
+			recurse = fields[3] == "recurse"
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
 		name := ""
@@ -87,13 +97,15 @@ func (d *Dependencies) Read(fn string) error {
 			UrlOrPath:     urlOrPath,
 			Version:       version,
 			Name:          name,
+			RelativePath:  relativePath,
+			Recurse:       recurse,
 			URL:           url,
 		})
 	}
 	return scanner.Err()
 }
 
-func (d *Dependencies) SaveModified() error {
+func (d *Dependencies) SaveModified(force bool) error {
 	byConfiguration := make(map[string][]*Library)
 
 	for _, lib := range d.Libraries {
@@ -104,7 +116,7 @@ func (d *Dependencies) SaveModified() error {
 	}
 
 	for configuration, libs := range byConfiguration {
-		modified := false
+		modified := force
 		for _, lib := range libs {
 			if lib.Modified {
 				modified = true
@@ -113,7 +125,7 @@ func (d *Dependencies) SaveModified() error {
 		}
 
 		if modified {
-			log.Printf("%s: Writing", configuration)
+			log.Printf("Writing %s", configuration)
 			deps := NewDependencies(libs)
 			if err := deps.Write(configuration); err != nil {
 				return err
