@@ -29,7 +29,7 @@ func NewRepositories() (r *Repositories, err error) {
 	return
 }
 
-func (repos *Repositories) GetRepositoryHash(p string) (h plumbing.Hash, err error) {
+func (repos *Repositories) GetRepositoryHashRecursively(p string) (h plumbing.Hash, err error) {
 	for {
 		r, err := git.PlainOpen(p)
 		if err != nil {
@@ -53,7 +53,27 @@ func (repos *Repositories) GetRepositoryHash(p string) (h plumbing.Hash, err err
 	return
 }
 
-func (repos *Repositories) UpdateRepository(source, path string, pull bool) (*git.Repository, error) {
+func (repos *Repositories) GetRepositoryHash(p string) (h plumbing.Hash, err error) {
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		return plumbing.ZeroHash, nil
+	}
+
+	r, err := git.PlainOpen(p)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+
+	ref, err := r.Head()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+
+	h = ref.Hash()
+
+	return
+}
+
+func (repos *Repositories) UpdateRepository(source, path string, pull, fetch bool) (*git.Repository, error) {
 	pullNecessary := true
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -89,7 +109,7 @@ func (repos *Repositories) UpdateRepository(source, path string, pull bool) (*gi
 			if err != nil && err != git.NoErrAlreadyUpToDate {
 				return nil, err
 			}
-		} else {
+		} else if fetch {
 			log.Printf("Fetch %s", path)
 			err = r.Fetch(&git.FetchOptions{
 				RemoteName: "origin",
@@ -103,18 +123,49 @@ func (repos *Repositories) UpdateRepository(source, path string, pull bool) (*gi
 	return r, nil
 }
 
+func (repos *Repositories) HasCommit(path string, version string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+
+	r, err := git.PlainOpen(path)
+	if err != nil {
+		return false
+	}
+
+	commit, err := r.CommitObject(plumbing.NewHash(version))
+	if err != nil {
+		return false
+	}
+
+	if false {
+		log.Printf("%v", commit)
+	}
+
+	return true
+}
+
 func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
 	name := path.Base(lib.URL.Path)
 	name = strings.TrimSuffix(name, path.Ext(name))
 	cached := path.Join(repos.Cache, name)
 	p := path.Join(directory, name)
 
-	_, err = repos.UpdateRepository(lib.URL.String(), cached, true)
+	pullCache := useHead
+	if !repos.HasCommit(cached, lib.Version) {
+		log.Printf("Version mismatch, pulling")
+		pullCache = true
+	}
+	if !pullCache {
+		log.Printf("Cache looks good")
+	}
+
+	_, err = repos.UpdateRepository(lib.URL.String(), cached, pullCache, false)
 	if err != nil {
 		return "", err
 	}
 
-	r, err := repos.UpdateRepository(cached, p, useHead)
+	r, err := repos.UpdateRepository(cached, p, useHead, true)
 	if err != nil {
 		return "", err
 	}
