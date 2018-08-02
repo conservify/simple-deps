@@ -44,6 +44,7 @@ func CloneDependency(lib *Library, directory string, useHead bool) (clonePath st
 
 		_, err := git.PlainClone(p, false, &git.CloneOptions{
 			URL:      lib.UrlOrPath,
+			Depth:    1,
 			Progress: os.Stdout,
 		})
 		if err != nil {
