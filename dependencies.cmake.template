@@ -1,0 +1,11 @@
+set(EXTERNAL_DEPENDENCIES)
+
+{{- range .Dependencies}}
+# Library
+set({{.Name}}_PATH "{{.Path}}")
+set({{.Name}}_INFO "{{.Name}}" "{{.Path}}")
+list(APPEND EXTERNAL_DEPENDENCIES "{{.Name}}")
+
+# EndLibrary
+{{- end}}
+

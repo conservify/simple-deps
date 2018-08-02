@@ -13,3 +13,4 @@ clean:
 
 install: $(BUILD)/simple-deps
 	cp $(BUILD)/simple-deps ~/tools/bin
+	cp *.template ~/tools/bin

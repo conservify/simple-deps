@@ -34,7 +34,7 @@ func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
 	return
 }
 
-func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
+func CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
 	name := path.Base(lib.URL.Path)
 	name = strings.TrimSuffix(name, path.Ext(name))
 	p := path.Join(directory, name)
@@ -47,17 +47,17 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 			Progress: os.Stdout,
 		})
 		if err != nil {
-			return err
+			return "", err
 		}
 	} else {
 		r, err := git.PlainOpen(p)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		w, err := r.Worktree()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if useHead {
@@ -65,7 +65,7 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 				RemoteName: "origin",
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				return err
+				return "", err
 			}
 		} else {
 			if lib.Version != "" {
@@ -76,7 +76,7 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 						RemoteName: "origin",
 					})
 					if err != nil && err != git.NoErrAlreadyUpToDate {
-						return err
+						return "", err
 					}
 
 					log.Printf("Checkout out %s", lib.Version)
@@ -85,7 +85,7 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 						Force: true,
 					})
 					if err != nil {
-						return err
+						return "", err
 					}
 				} else {
 					log.Printf("%s: Already on %s", name, lib.Version)
@@ -95,7 +95,7 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 
 		ref, err := r.Head()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		newVersion := ref.Hash().String()
@@ -105,5 +105,5 @@ func CloneDependency(lib *Library, directory string, useHead bool) (err error) {
 			lib.Modified = true
 		}
 	}
-	return
+	return p, nil
 }

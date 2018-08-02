@@ -10,6 +10,7 @@ type options struct {
 	Configuration string
 	Directory     string
 	UseHead       bool
+	UseLocal      bool
 }
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 	flag.StringVar(&o.Configuration, "config", "", "libraries file")
 	flag.StringVar(&o.Directory, "dir", "./gitdeps", "where to cache libraries")
 	flag.BoolVar(&o.UseHead, "use-head", false, "pull and use head revision of git repositories")
+	flag.BoolVar(&o.UseLocal, "use-local", false, "check for and use local versions")
 
 	flag.Parse()
 
@@ -39,7 +41,10 @@ func main() {
 		}
 	}
 
-	deps.Refresh(o.Directory, o.UseHead)
+	err := deps.Refresh(o.Directory, o.UseHead)
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
 
 	deps.SaveModified()
 }

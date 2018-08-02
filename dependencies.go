@@ -3,16 +3,21 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
+	"text/template"
 )
 
 type Library struct {
 	Configuration string
 	UrlOrPath     string
 	Version       string
+	Name          string
 	Modified      bool
 	URL           *url.URL
 }
@@ -53,8 +58,8 @@ func (d *Dependencies) Write(path string) error {
 
 }
 
-func (d *Dependencies) Read(path string) error {
-	file, err := os.Open(path)
+func (d *Dependencies) Read(fn string) error {
+	file, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
@@ -71,10 +76,18 @@ func (d *Dependencies) Read(path string) error {
 			version = fields[1]
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
+		name := ""
+		if url != nil {
+			name = path.Base(url.Path)
+			name = strings.TrimSuffix(name, path.Ext(name))
+		} else {
+			name = path.Base(urlOrPath)
+		}
 		d.Libraries = append(d.Libraries, &Library{
-			Configuration: path,
+			Configuration: fn,
 			UrlOrPath:     urlOrPath,
 			Version:       version,
+			Name:          name,
 			URL:           url,
 		})
 	}
@@ -112,22 +125,103 @@ func (d *Dependencies) SaveModified() error {
 	return nil
 }
 
+func checkForLocal(lib *Library) string {
+	expected := path.Join("../", lib.Name)
+	if s, err := os.Stat(expected); err == nil && !s.Mode().IsRegular() {
+		abs, err := filepath.Abs(expected)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return abs
+	}
+	return ""
+}
+
+type DependencyInfo struct {
+	Name      string
+	Path      string
+	Recursive bool
+}
+
+type TemplateData struct {
+	Dependencies []*DependencyInfo
+}
+
 func (d *Dependencies) Refresh(directory string, useHead bool) error {
+	templateDatas := make([]*DependencyInfo, 0)
+	project := "./"
+
 	for _, lib := range d.Libraries {
-		if lib.URL != nil {
-			if err := CloneDependency(lib, directory, useHead); err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
-				version, err := GetRepositoryHash(lib.UrlOrPath)
-				if err == nil {
-					log.Printf("Using directory %v (%v)", lib.UrlOrPath, version)
-				} else {
-					log.Printf("Using directory %v", lib.UrlOrPath)
+		dependencyPath := checkForLocal(lib)
+		if dependencyPath == "" {
+			if lib.URL != nil {
+				clonePath, err := CloneDependency(lib, directory, useHead)
+				if err != nil {
+					log.Fatal(err)
+				}
+				dependencyPath, err = filepath.Abs(clonePath)
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
+					dependencyPath, err = filepath.Abs(lib.UrlOrPath)
+					if err != nil {
+						return err
+					}
+					version, err := GetRepositoryHash(lib.UrlOrPath)
+					if err == nil {
+						log.Printf("Using directory %v (%v)", lib.UrlOrPath, version)
+					} else {
+						log.Printf("Using directory %v", lib.UrlOrPath)
+					}
 				}
 			}
 		}
+
+		log.Printf("%s %s", lib.UrlOrPath, dependencyPath)
+
+		templateDatas = append(templateDatas, &DependencyInfo{
+			Name: lib.Name,
+			Path: dependencyPath,
+		})
+
+		project = filepath.Dir(lib.Configuration)
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	dir := filepath.Dir(executable)
+
+	templateData, err := ioutil.ReadFile(filepath.Join(dir, "dependencies.cmake.template"))
+	if err != nil {
+		return err
+	}
+
+	template, err := template.New("dependencies.cmake").Parse(string(templateData))
+	if err != nil {
+		return err
+	}
+
+	dependenciesPath := filepath.Join(project, "dependencies.cmake")
+	log.Printf("Writing %s", dependenciesPath)
+
+	dependenciesFile, err := os.Create(dependenciesPath)
+	if err != nil {
+		return err
+	}
+
+	defer dependenciesFile.Close()
+
+	data := TemplateData{
+		Dependencies: templateDatas,
+	}
+
+	err = template.Execute(dependenciesFile, data)
+	if err != nil {
+		return err
 	}
 
 	return nil
