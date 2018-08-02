@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
 )
 
 type options struct {
@@ -24,9 +23,6 @@ func main() {
 	flag.Parse()
 
 	configs := make([]string, 0)
-	if s, err := os.Stat("arduino-libraries"); err == nil && !s.IsDir() {
-		configs = append(configs, "arduino-libraries")
-	}
 	if o.Configuration != "" {
 		configs = append(configs, o.Configuration)
 	}
