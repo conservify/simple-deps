@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 )
 
 type options struct {
@@ -21,6 +22,14 @@ func main() {
 	flag.BoolVar(&o.Write, "write", false, "write the configuration file")
 
 	flag.Parse()
+
+	if os.Getenv("SIMPLE_USE_HEAD") != "" {
+		o.UseHead = true
+	}
+
+	if os.Getenv("SIMPLE_DEPS_WRITE") != "" {
+		o.Write = true
+	}
 
 	configs := make([]string, 0)
 	if o.Configuration != "" {

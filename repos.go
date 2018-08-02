@@ -182,7 +182,7 @@ func (repos *Repositories) CloneDependency(lib *Library, directory string, useHe
 
 	head := ref.Hash().String()
 
-	if useHead {
+	if useHead && lib.Version != "*" {
 		if lib.Version != head {
 			log.Printf("%s: Version changed: %v", name, head)
 			lib.Version = head
