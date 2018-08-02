@@ -148,16 +148,6 @@ func checkForLocalOverride(lib *Library) (string, error) {
 	return "", nil
 }
 
-type DependencyInfo struct {
-	Name      string
-	Path      string
-	Recursive bool
-}
-
-type TemplateData struct {
-	Dependencies []*DependencyInfo
-}
-
 func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bool) error {
 	templateDatas := make([]*DependencyInfo, 0)
 	project := "./"
@@ -201,6 +191,24 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 		project = filepath.Dir(lib.Configuration)
 	}
 
+	data := &TemplateData{
+		Dependencies: templateDatas,
+	}
+
+	return data.Write(project)
+}
+
+type DependencyInfo struct {
+	Name      string
+	Path      string
+	Recursive bool
+}
+
+type TemplateData struct {
+	Dependencies []*DependencyInfo
+}
+
+func (data *TemplateData) Write(project string) error {
 	executable, err := os.Executable()
 	if err != nil {
 		panic(err)
@@ -226,10 +234,6 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 	}
 
 	defer dependenciesFile.Close()
-
-	data := TemplateData{
-		Dependencies: templateDatas,
-	}
 
 	err = template.Execute(dependenciesFile, data)
 	if err != nil {
