@@ -10,7 +10,26 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
-func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
+type Repositories struct {
+	Cache string
+}
+
+func NewRepositories() (r *Repositories, err error) {
+	home := os.Getenv("HOME")
+
+	r = &Repositories{
+		Cache: path.Join(home, ".simple-deps"),
+	}
+
+	err = os.MkdirAll(r.Cache, 0755)
+	if err != nil {
+		return nil, err
+	}
+
+	return
+}
+
+func (repos *Repositories) GetRepositoryHash(p string) (h plumbing.Hash, err error) {
 	for {
 		r, err := git.PlainOpen(p)
 		if err != nil {
@@ -34,76 +53,102 @@ func GetRepositoryHash(p string) (h plumbing.Hash, err error) {
 	return
 }
 
-func CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
-	name := path.Base(lib.URL.Path)
-	name = strings.TrimSuffix(name, path.Ext(name))
-	p := path.Join(directory, name)
+func (repos *Repositories) UpdateRepository(source, path string, pull bool) (*git.Repository, error) {
+	pullNecessary := true
 
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		log.Printf("Cloning %s %s", lib.URL, p)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		log.Printf("Cloning %s %s", source, path)
 
-		_, err := git.PlainClone(p, false, &git.CloneOptions{
-			URL:      lib.UrlOrPath,
+		_, err := git.PlainClone(path, false, &git.CloneOptions{
+			URL:      source,
 			Progress: os.Stdout,
 		})
 		if err != nil {
-			return "", err
-		}
-	} else {
-		r, err := git.PlainOpen(p)
-		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		w, err := r.Worktree()
-		if err != nil {
-			return "", err
-		}
+		pullNecessary = false
+	}
 
-		if useHead {
+	r, err := git.PlainOpen(path)
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := r.Worktree()
+	if err != nil {
+		return nil, err
+	}
+
+	if pullNecessary {
+		if pull {
+			log.Printf("Pull %s", path)
 			err = w.Pull(&git.PullOptions{
 				RemoteName: "origin",
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				return "", err
+				return nil, err
 			}
 		} else {
-			if lib.Version != "" {
-				existing, err := GetRepositoryHash(p)
-				if existing.String() != lib.Version {
-					log.Printf("Fetching %s %s", lib.URL, p)
-					err = r.Fetch(&git.FetchOptions{
-						RemoteName: "origin",
-					})
-					if err != nil && err != git.NoErrAlreadyUpToDate {
-						return "", err
-					}
-
-					log.Printf("Checkout out %s", lib.Version)
-					err = w.Checkout(&git.CheckoutOptions{
-						Hash:  plumbing.NewHash(lib.Version),
-						Force: true,
-					})
-					if err != nil {
-						return "", err
-					}
-				} else {
-					log.Printf("%s: Already on %s", name, lib.Version)
-				}
+			log.Printf("Fetch %s", path)
+			err = r.Fetch(&git.FetchOptions{
+				RemoteName: "origin",
+			})
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				return nil, err
 			}
 		}
+	}
 
-		ref, err := r.Head()
-		if err != nil {
-			return "", err
-		}
+	return r, nil
+}
 
-		newVersion := ref.Hash().String()
-		if lib.Version != newVersion {
-			log.Printf("%s: Version changed: %v", name, newVersion)
-			lib.Version = newVersion
+func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
+	name := path.Base(lib.URL.Path)
+	name = strings.TrimSuffix(name, path.Ext(name))
+	cached := path.Join(repos.Cache, name)
+	p := path.Join(directory, name)
+
+	_, err = repos.UpdateRepository(lib.URL.String(), cached, true)
+	if err != nil {
+		return "", err
+	}
+
+	r, err := repos.UpdateRepository(cached, p, useHead)
+	if err != nil {
+		return "", err
+	}
+
+	wc, err := r.Worktree()
+	if err != nil {
+		return "", err
+	}
+
+	ref, err := r.Head()
+	if err != nil {
+		return "", err
+	}
+
+	head := ref.Hash().String()
+
+	if useHead {
+		if lib.Version != head {
+			log.Printf("%s: Version changed: %v", name, head)
+			lib.Version = head
 			lib.Modified = true
 		}
 	}
+
+	if lib.Version != "" {
+		log.Printf("Checkout out %s (head = %s)", lib.Version, head)
+		err = wc.Checkout(&git.CheckoutOptions{
+			Hash:  plumbing.NewHash(lib.Version),
+			Force: true,
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+
 	return p, nil
 }

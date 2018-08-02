@@ -146,7 +146,7 @@ type TemplateData struct {
 	Dependencies []*DependencyInfo
 }
 
-func (d *Dependencies) Refresh(directory string, useHead bool) error {
+func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bool) error {
 	templateDatas := make([]*DependencyInfo, 0)
 	project := "./"
 
@@ -157,14 +157,14 @@ func (d *Dependencies) Refresh(directory string, useHead bool) error {
 		}
 		if dependencyPath == "" {
 			if lib.URL != nil {
-				clonePath, err := CloneDependency(lib, directory, useHead)
+				clonePath, err := repos.CloneDependency(lib, directory, useHead)
 				if err != nil {
 					return err
 				}
 				dependencyPath = clonePath
 			} else {
 				if s, err := os.Stat(lib.UrlOrPath); err == nil && s.IsDir() {
-					version, err := GetRepositoryHash(lib.UrlOrPath)
+					version, err := repos.GetRepositoryHash(lib.UrlOrPath)
 					if err == nil {
 						log.Printf("Using directory %v (%v)", lib.UrlOrPath, version)
 					} else {

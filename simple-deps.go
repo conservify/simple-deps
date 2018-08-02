@@ -30,6 +30,11 @@ func main() {
 	}
 	configs = append(configs, flag.Args()...)
 
+	repositories, err := NewRepositories()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
 	deps := NewEmptyDependencies()
 
 	for _, configuration := range configs {
@@ -39,7 +44,7 @@ func main() {
 		}
 	}
 
-	err := deps.Refresh(o.Directory, o.UseHead)
+	err = deps.Refresh(o.Directory, repositories, o.UseHead)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
