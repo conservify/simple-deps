@@ -21,7 +21,7 @@ cp *.template ~/workspace/bin
         }
 
         stage ('archive') {
-            archiveArtifacts allowEmptyArchive: false, artifacts: 'build/simple-deps'
+            archiveArtifacts allowEmptyArchive: false, artifacts: 'build/*'
         }
     }
 }
