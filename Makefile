@@ -1,5 +1,6 @@
 GOARCH ?= amd64
-GO ?= env GOOS=linux GOARCH=$(GOARCH) go
+GOOS ?= linux
+GO ?= env GOOS=$(GOOS) GOARCH=$(GOARCH) go
 BUILD ?= build
 
 all: $(BUILD)/simple-deps $(BUILD)/dependencies.cmake.template
