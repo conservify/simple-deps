@@ -6,6 +6,7 @@ BUILD ?= build
 all: $(BUILD)/simple-deps $(BUILD)/dependencies.cmake.template
 
 $(BUILD)/simple-deps: *.go
+	$(GO) get gopkg.in/src-d/go-git.v4
 	$(GO) build -o $@ $^
 
 $(BUILD)/dependencies.cmake.template: dependencies.cmake.template

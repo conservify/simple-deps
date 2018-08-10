@@ -170,6 +170,7 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 		if err != nil {
 			return err
 		}
+
 		if dependencyPath == "" {
 			if lib.URL != nil {
 				clonePath, err := repos.CloneDependency(lib, directory, useHead)

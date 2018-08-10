@@ -73,11 +73,11 @@ func (repos *Repositories) GetRepositoryHash(p string) (h plumbing.Hash, err err
 	return
 }
 
-func (repos *Repositories) UpdateRepository(source, path string, pull, fetch bool) (*git.Repository, error) {
+func (repos *Repositories) UpdateRepository(name, source, path string, pull, fetch bool) (*git.Repository, error) {
 	pullNecessary := true
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		log.Printf("Cloning %s %s", source, path)
+		log.Printf("%s: Cloning %s %s", name, source, path)
 
 		_, err := git.PlainClone(path, false, &git.CloneOptions{
 			URL:      source,
@@ -102,7 +102,7 @@ func (repos *Repositories) UpdateRepository(source, path string, pull, fetch boo
 
 	if pullNecessary {
 		if pull {
-			log.Printf("Pull %s", path)
+			log.Printf("%s: Pull %s", name, path)
 			err = w.Pull(&git.PullOptions{
 				RemoteName: "origin",
 			})
@@ -110,7 +110,7 @@ func (repos *Repositories) UpdateRepository(source, path string, pull, fetch boo
 				return nil, err
 			}
 		} else if fetch {
-			log.Printf("Fetch %s", path)
+			log.Printf("%s: Fetch %s", name, path)
 			err = r.Fetch(&git.FetchOptions{
 				RemoteName: "origin",
 			})
@@ -153,19 +153,19 @@ func (repos *Repositories) CloneDependency(lib *Library, directory string, useHe
 
 	pullCache := useHead
 	if lib.Version == "*" || !repos.HasCommit(cached, lib.Version) {
-		log.Printf("Version mismatch, pulling")
+		log.Printf("%s: Version mismatch, pulling", name)
 		pullCache = true
 	}
 	if !pullCache {
-		log.Printf("Cache looks good")
+		log.Printf("%s: Cache looks good", name)
 	}
 
-	_, err = repos.UpdateRepository(lib.URL.String(), cached, pullCache, false)
+	_, err = repos.UpdateRepository(lib.Name, lib.URL.String(), cached, pullCache, false)
 	if err != nil {
 		return "", err
 	}
 
-	r, err := repos.UpdateRepository(cached, p, useHead, true)
+	r, err := repos.UpdateRepository(lib.Name, cached, p, useHead, true)
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +191,7 @@ func (repos *Repositories) CloneDependency(lib *Library, directory string, useHe
 	}
 
 	if lib.Version != "" {
-		log.Printf("Checkout out %s (head = %s)", lib.Version, head)
+		log.Printf("%s: Checkout out %s (head = %s)", name, lib.Version, head)
 		err = wc.Checkout(&git.CheckoutOptions{
 			Hash:  plumbing.NewHash(lib.Version),
 			Force: true,
