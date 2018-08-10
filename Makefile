@@ -6,7 +6,6 @@ BUILD ?= build
 all: $(BUILD)/simple-deps $(BUILD)/dependencies.cmake.template
 
 $(BUILD)/simple-deps: *.go
-	$(GO) get gopkg.in/src-d/go-git.v4
 	$(GO) build -o $@ $^
 
 $(BUILD)/dependencies.cmake.template: dependencies.cmake.template
@@ -21,3 +20,6 @@ clean:
 install: $(BUILD)/simple-deps
 	cp $(BUILD)/simple-deps ~/tools/bin
 	cp *.template ~/tools/bin
+
+deps:
+	$(GO) get gopkg.in/src-d/go-git.v4
