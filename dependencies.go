@@ -53,6 +53,10 @@ func (d *Dependencies) Write(path string) error {
 		if lib.Recurse {
 			recurseFlag = "recurse"
 		}
+		version := lib.Version
+		if version == "" {
+			version = "*"
+		}
 		f.WriteString(fmt.Sprintf("%s %s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath, recurseFlag))
 	}
 
@@ -74,7 +78,7 @@ func (d *Dependencies) Read(fn string) error {
 		line := scanner.Text()
 		fields := strings.Split(line, " ")
 		urlOrPath := fields[0]
-		version := "*"
+		version := ""
 		relativePath := "/"
 		recurse := false
 		if len(fields) > 1 {
