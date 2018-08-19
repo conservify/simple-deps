@@ -194,11 +194,14 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 			}
 		}
 
+		if dependencyPath == "" {
+			return fmt.Errorf("Unable to find dependency: %v", lib)
+		}
+
 		dependencyPath, err = filepath.Abs(dependencyPath)
 		if err != nil {
 			return err
 		}
-
 		log.Printf("Dependency: %s = %s", lib.UrlOrPath, dependencyPath)
 
 		templateDatas = append(templateDatas, &DependencyInfo{
