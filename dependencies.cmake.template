@@ -5,6 +5,7 @@ set(EXTERNAL_DEPENDENCIES)
 set({{.Name}}_PATH "{{.Path}}{{.RelativePath}}")
 set({{.Name}}_RECURSE {{if .Recurse}}True{{else}}False{{end}})
 list(APPEND EXTERNAL_DEPENDENCIES "{{.Name}}")
+list(APPEND CMAKE_MODULE_PATH "{{.Path}}{{.RelativePath}}")
 
 # EndLibrary
 {{- end}}
