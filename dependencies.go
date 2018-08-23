@@ -165,14 +165,20 @@ func checkForLocalOverride(lib *Library) (string, error) {
 	return "", nil
 }
 
-func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bool) error {
+func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead, allowLocal bool) error {
 	templateDatas := make([]*DependencyInfo, 0)
 	project := "./"
 
 	for _, lib := range d.Libraries {
-		dependencyPath, err := checkForLocalOverride(lib)
-		if err != nil {
-			return err
+		dependencyPath := ""
+
+		if allowLocal {
+			overridePath, err := checkForLocalOverride(lib)
+			if err != nil {
+				return err
+			} else {
+				dependencyPath = overridePath
+			}
 		}
 
 		if dependencyPath == "" {
@@ -198,7 +204,7 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead bo
 			return fmt.Errorf("Unable to find dependency: %v", lib)
 		}
 
-		dependencyPath, err = filepath.Abs(dependencyPath)
+		dependencyPath, err := filepath.Abs(dependencyPath)
 		if err != nil {
 			return err
 		}

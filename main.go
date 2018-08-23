@@ -10,6 +10,7 @@ type options struct {
 	Configuration string
 	Directory     string
 	UseHead       bool
+	AllowLocal    bool
 	Write         bool
 }
 
@@ -19,6 +20,7 @@ func main() {
 	flag.StringVar(&o.Configuration, "config", "", "libraries file")
 	flag.StringVar(&o.Directory, "dir", "./gitdeps", "where to cache libraries")
 	flag.BoolVar(&o.UseHead, "use-head", false, "pull and use head revision of git repositories")
+	flag.BoolVar(&o.AllowLocal, "allow-local", true, "check for adjacent local copies, otherwise require cloning")
 	flag.BoolVar(&o.Write, "write", false, "write the configuration file")
 
 	flag.Parse()
@@ -51,7 +53,7 @@ func main() {
 		}
 	}
 
-	err = deps.Refresh(o.Directory, repositories, o.UseHead)
+	err = deps.Refresh(o.Directory, repositories, o.UseHead, o.AllowLocal)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
