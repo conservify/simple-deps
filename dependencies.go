@@ -52,7 +52,11 @@ func (d *Dependencies) Write(path string) error {
 		if version == "" {
 			version = "*"
 		}
-		f.WriteString(fmt.Sprintf("%s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath))
+		if lib.RelativePath != "/" {
+			f.WriteString(fmt.Sprintf("%s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath))
+		} else {
+			f.WriteString(fmt.Sprintf("%s %s\n", lib.UrlOrPath, lib.Version))
+		}
 	}
 
 	return nil
