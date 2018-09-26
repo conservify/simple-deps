@@ -18,7 +18,6 @@ type Library struct {
 	UrlOrPath     string
 	Version       string
 	RelativePath  string
-	Recurse       bool
 	Name          string
 	Modified      bool
 	URL           *url.URL
@@ -49,15 +48,11 @@ func (d *Dependencies) Write(path string) error {
 	defer f.Close()
 
 	for _, lib := range d.Libraries {
-		recurseFlag := "norecurse"
-		if lib.Recurse {
-			recurseFlag = "recurse"
-		}
 		version := lib.Version
 		if version == "" {
 			version = "*"
 		}
-		f.WriteString(fmt.Sprintf("%s %s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath, recurseFlag))
+		f.WriteString(fmt.Sprintf("%s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath))
 	}
 
 	return nil
@@ -80,15 +75,11 @@ func (d *Dependencies) Read(fn string) error {
 		urlOrPath := fields[0]
 		version := ""
 		relativePath := "/"
-		recurse := false
 		if len(fields) > 1 {
 			version = fields[1]
 		}
 		if len(fields) > 2 {
 			relativePath = fields[2]
-		}
-		if len(fields) > 3 {
-			recurse = fields[3] == "recurse"
 		}
 		url, _ := url.ParseRequestURI(urlOrPath)
 
@@ -109,7 +100,6 @@ func (d *Dependencies) Read(fn string) error {
 			Version:       version,
 			Name:          name,
 			RelativePath:  relativePath,
-			Recurse:       recurse,
 			URL:           url,
 		})
 
@@ -214,7 +204,6 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead, a
 			Name:         lib.Name,
 			Path:         dependencyPath,
 			RelativePath: lib.RelativePath,
-			Recurse:      lib.Recurse,
 		})
 
 		project = filepath.Dir(lib.Configuration)
@@ -231,7 +220,6 @@ type DependencyInfo struct {
 	Name         string
 	Path         string
 	RelativePath string
-	Recurse      bool
 }
 
 type TemplateData struct {
