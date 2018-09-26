@@ -53,9 +53,9 @@ func (d *Dependencies) Write(path string) error {
 			version = "*"
 		}
 		if lib.RelativePath != "/" {
-			f.WriteString(fmt.Sprintf("%s %s %s\n", lib.UrlOrPath, lib.Version, lib.RelativePath))
+			f.WriteString(fmt.Sprintf("%s %s %s\n", lib.UrlOrPath, version, lib.RelativePath))
 		} else {
-			f.WriteString(fmt.Sprintf("%s %s\n", lib.UrlOrPath, lib.Version))
+			f.WriteString(fmt.Sprintf("%s %s\n", lib.UrlOrPath, version))
 		}
 	}
 
