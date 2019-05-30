@@ -1,16 +1,13 @@
 timestamps {
     node {
         stage ('git') {
-            checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/Conservify/simple-deps.git']]])
+            checkout scm
         }
 
         stage ('build') {
-            sh """
-export PATH=/usr/local/go/bin:$PATH
-export GOPATH=`pwd`/../go
-go get gopkg.in/src-d/go-git.v4
-make
- """
+            withEnv(["PATH+GOLANG=${tool 'golang-amd64'}/bin"]) {
+                sh "make"
+            }
         }
 
         stage ('install') {
