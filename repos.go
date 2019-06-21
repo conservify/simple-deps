@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gopkg.in/src-d/go-git.v4"
+	gitconfig "gopkg.in/src-d/go-git.v4/config"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
@@ -136,13 +137,9 @@ func (repos *Repositories) HasCommit(path string, version string) bool {
 		return false
 	}
 
-	commit, err := r.CommitObject(plumbing.NewHash(version))
+	_, err = r.CommitObject(plumbing.NewHash(version))
 	if err != nil {
 		return false
-	}
-
-	if false {
-		log.Printf("%v", commit)
 	}
 
 	return true
@@ -161,6 +158,28 @@ func (repos *Repositories) GetWorkingCopyPathAndName(lib *Library, directory str
 		return path.Join(directory, libPath), name, nil
 	}
 	return path.Join(directory, name), name, nil
+}
+
+func AddActualUpstreamRemoteIfNecessary(lib *Library, r *git.Repository) error {
+	remotes, err := r.Remotes()
+	if err != nil {
+		return err
+	}
+	for _, r := range remotes {
+		if r.Config().Name == "upstream" {
+			return nil
+		}
+	}
+
+	_, err = r.CreateRemote(&gitconfig.RemoteConfig{
+		Name: "upstream",
+		URLs: []string{lib.URL.String()},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
@@ -182,6 +201,11 @@ func (repos *Repositories) CloneDependency(lib *Library, directory string, useHe
 	}
 
 	r, err := repos.UpdateRepository(lib.Name, cached, p, useHead, true)
+	if err != nil {
+		return "", err
+	}
+
+	err = AddActualUpstreamRemoteIfNecessary(lib, r)
 	if err != nil {
 		return "", err
 	}
