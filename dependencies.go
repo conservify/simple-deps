@@ -159,6 +159,11 @@ func checkForLocalOverride(lib *Library) (string, error) {
 	return "", nil
 }
 
+func touchLocalOverrideDummy(path string) error {
+	log.Printf("Creating %s", path)
+	return os.MkdirAll(path, 0755)
+}
+
 func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead, allowLocal bool) error {
 	templateDatas := make([]*DependencyInfo, 0)
 	project := "./"
@@ -171,7 +176,14 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead, a
 			if err != nil {
 				return err
 			} else {
-				dependencyPath = overridePath
+				if overridePath != "" {
+					dependencyPath = overridePath
+					dummyPath, _, _ := repos.GetWorkingCopyPathAndName(lib, directory)
+					err := touchLocalOverrideDummy(dummyPath)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 

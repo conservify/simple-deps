@@ -155,14 +155,17 @@ func ParseRepositoryURL(u *url.URL) (urlPath, name string) {
 	return
 }
 
-func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
+func (repos *Repositories) GetWorkingCopyPathAndName(lib *Library, directory string) (string, string, error) {
 	libPath, name := ParseRepositoryURL(lib.URL)
-	cached := path.Join(repos.Cache, name)
-
-	p := path.Join(directory, name)
 	if repos.NestedLayout {
-		p = path.Join(directory, libPath)
+		return path.Join(directory, libPath), name, nil
 	}
+	return path.Join(directory, name), name, nil
+}
+
+func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
+	p, name, _ := repos.GetWorkingCopyPathAndName(lib, directory)
+	cached := path.Join(repos.Cache, name)
 
 	pullCache := useHead
 	if lib.Version == "*" || !repos.HasCommit(cached, lib.Version) {
