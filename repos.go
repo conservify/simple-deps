@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -11,14 +12,16 @@ import (
 )
 
 type Repositories struct {
-	Cache string
+	NestedLayout bool
+	Cache        string
 }
 
-func NewRepositories() (r *Repositories, err error) {
+func NewRepositories(nestedLayout bool) (r *Repositories, err error) {
 	home := os.Getenv("HOME")
 
 	r = &Repositories{
-		Cache: path.Join(home, ".simple-deps"),
+		NestedLayout: nestedLayout,
+		Cache:        path.Join(home, ".simple-deps"),
 	}
 
 	err = os.MkdirAll(r.Cache, 0755)
@@ -145,11 +148,21 @@ func (repos *Repositories) HasCommit(path string, version string) bool {
 	return true
 }
 
-func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
-	name := path.Base(lib.URL.Path)
+func ParseRepositoryURL(u *url.URL) (urlPath, name string) {
+	name = path.Base(u.Path)
+	urlPath = strings.TrimSuffix(u.Path[1:], path.Ext(name))
 	name = strings.TrimSuffix(name, path.Ext(name))
+	return
+}
+
+func (repos *Repositories) CloneDependency(lib *Library, directory string, useHead bool) (clonePath string, err error) {
+	libPath, name := ParseRepositoryURL(lib.URL)
 	cached := path.Join(repos.Cache, name)
+
 	p := path.Join(directory, name)
+	if repos.NestedLayout {
+		p = path.Join(directory, libPath)
+	}
 
 	pullCache := useHead
 	if lib.Version == "*" || !repos.HasCommit(cached, lib.Version) {

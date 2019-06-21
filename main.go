@@ -12,6 +12,7 @@ type options struct {
 	UseHead       bool
 	AllowLocal    bool
 	Write         bool
+	NestedLayout  bool
 }
 
 func main() {
@@ -19,6 +20,7 @@ func main() {
 
 	flag.StringVar(&o.Configuration, "config", "", "libraries file")
 	flag.StringVar(&o.Directory, "dir", "./gitdeps", "where to cache libraries")
+	flag.BoolVar(&o.NestedLayout, "nested", false, "create nested directory layout")
 	flag.BoolVar(&o.UseHead, "use-head", false, "pull and use head revision of git repositories")
 	flag.BoolVar(&o.AllowLocal, "allow-local", true, "check for adjacent local copies, otherwise require cloning")
 	flag.BoolVar(&o.Write, "write", false, "write the configuration file")
@@ -39,7 +41,7 @@ func main() {
 	}
 	configs = append(configs, flag.Args()...)
 
-	repositories, err := NewRepositories()
+	repositories, err := NewRepositories(o.NestedLayout)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
