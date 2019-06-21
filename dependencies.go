@@ -178,10 +178,12 @@ func (d *Dependencies) Refresh(directory string, repos *Repositories, useHead, a
 			} else {
 				if overridePath != "" {
 					dependencyPath = overridePath
-					dummyPath, _, _ := repos.GetWorkingCopyPathAndName(lib, directory)
-					err := touchLocalOverrideDummy(dummyPath)
-					if err != nil {
-						return err
+					if lib.URL != nil {
+						dummyPath, _, _ := repos.GetWorkingCopyPathAndName(lib, directory)
+						err := touchLocalOverrideDummy(dummyPath)
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
